@@ -205,6 +205,7 @@ func (g *GoWSDL) resolveXSDExternals(schema *XSDSchema, url *url.URL) error {
 
 		err = xml.Unmarshal(data, newschema)
 		if err != nil {
+			log.Println(err)
 			return err
 		}
 
@@ -213,7 +214,7 @@ func (g *GoWSDL) resolveXSDExternals(schema *XSDSchema, url *url.URL) error {
 
 			g.currentRecursionLevel++
 
-			//log.Printf("Entering recursion %d\n", g.currentRecursionLevel)
+			log.Printf("Entering recursion %d\n", g.currentRecursionLevel)
 			g.resolveXSDExternals(newschema, url)
 		}
 
@@ -235,10 +236,10 @@ func (g *GoWSDL) genTypes() ([]byte, error) {
 		"replaceReservedWords": replaceReservedWords,
 		"makePublic":           makePublic,
 		"comment":              comment,
+		"findType":             g.findType,
 	}
 
-	//TODO resolve element refs in place.
-	//g.resolveElementsRefs()
+	g.resolveSchemaElementRefs()
 
 	data := new(bytes.Buffer)
 	tmpl := template.Must(template.New("types").Funcs(funcMap).Parse(typesTmpl))
@@ -248,6 +249,80 @@ func (g *GoWSDL) genTypes() ([]byte, error) {
 	}
 
 	return data.Bytes(), nil
+}
+
+func (g *GoWSDL) resolveComplexRefs(t *XSDComplexType) {
+	if t == nil {
+		return
+	}
+	for _, ct := range t.All {
+		g.resolveElementRef(ct)
+	}
+	for _, ct := range t.Choice {
+		g.resolveElementRef(ct)
+	}
+	for _, ct := range t.Sequence {
+		g.resolveElementRef(ct)
+	}
+	for _, ct := range t.SequenceChoice {
+		g.resolveElementRef(ct)
+	}
+}
+
+func (g *GoWSDL) resolveSimpleRefs(t *XSDSimpleType) {
+	if t == nil {
+		return
+	}
+}
+
+func (g *GoWSDL) resolveElementRef(ct *XSDElement) {
+	if ct == nil {
+		return
+	}
+	if ct.Ref != "" && ct.Type == "" {
+		for _, s := range g.wsdl.Types.Schemas {
+			for _, e := range s.Elements {
+				if strings.EqualFold(ct.Ref, e.Name) {
+					ct.Name = ct.Ref
+
+					if e.ComplexType != nil && e.ComplexType.Name != "" {
+						ct.Type = e.ComplexType.Name
+					} else if e.SimpleType != nil {
+						if e.SimpleType.Name != "" {
+							ct.Type = e.SimpleType.Name
+						} else {
+							if e.SimpleType.Restriction != nil {
+								ct.Type = e.SimpleType.Restriction.Base
+							}
+						}
+					} else {
+						ct.Type = e.Type
+					}
+
+					ct.ComplexType = e.ComplexType
+					ct.SimpleType = e.SimpleType
+				}
+			}
+		}
+	}
+
+	g.resolveComplexRefs(ct.ComplexType)
+	g.resolveSimpleRefs(ct.SimpleType)
+}
+
+func (g *GoWSDL) resolveSchemaElementRefs() {
+	for _, s := range g.wsdl.Types.Schemas {
+
+		for _, ct := range s.ComplexTypes {
+			g.resolveComplexRefs(ct)
+		}
+		for _, ct := range s.SimpleType {
+			g.resolveSimpleRefs(ct)
+		}
+		for _, ct := range s.Elements {
+			g.resolveElementRef(ct)
+		}
+	}
 }
 
 func (g *GoWSDL) genOperations() ([]byte, error) {
@@ -480,7 +555,8 @@ func stripns(xsdType string) string {
 func makePublic(identifier string) string {
 	field := []rune(identifier)
 	if len(field) == 0 {
-		return identifier
+		return "identifier"
+		// return identifier
 	}
 
 	field[0] = unicode.ToUpper(field[0])

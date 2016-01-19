@@ -56,10 +56,10 @@ type XSDComplexType struct {
 	Abstract       bool              `xml:"abstract,attr"`
 	Name           string            `xml:"name,attr"`
 	Mixed          bool              `xml:"mixed,attr"`
-	Sequence       []XSDElement      `xml:"sequence>element"`
-	Choice         []XSDElement      `xml:"choice>element"`
-	SequenceChoice []XSDElement      `xml:"sequence>choice>element"`
-	All            []XSDElement      `xml:"all>element"`
+	Sequence       []*XSDElement     `xml:"sequence>element"`
+	Choice         []*XSDElement     `xml:"choice>element"`
+	SequenceChoice []*XSDElement     `xml:"sequence>choice>element"`
+	All            []*XSDElement     `xml:"all>element"`
 	ComplexContent XSDComplexContent `xml:"complexContent"`
 	SimpleContent  XSDSimpleContent  `xml:"simpleContent"`
 	Attributes     []*XSDAttribute   `xml:"attribute"`
@@ -67,11 +67,11 @@ type XSDComplexType struct {
 
 // XSDGroup element is used to define a group of elements to be used in complex type definitions.
 type XSDGroup struct {
-	Name     string       `xml:"name,attr"`
-	Ref      string       `xml:"ref,attr"`
-	Sequence []XSDElement `xml:"sequence>element"`
-	Choice   []XSDElement `xml:"choice>element"`
-	All      []XSDElement `xml:"all>element"`
+	Name     string        `xml:"name,attr"`
+	Ref      string        `xml:"ref,attr"`
+	Sequence []*XSDElement `xml:"sequence>element"`
+	Choice   []*XSDElement `xml:"choice>element"`
+	All      []*XSDElement `xml:"all>element"`
 }
 
 // XSDComplexContent element defines extensions or restrictions on a complex
@@ -93,7 +93,7 @@ type XSDExtension struct {
 	XMLName    xml.Name        `xml:"extension"`
 	Base       string          `xml:"base,attr"`
 	Attributes []*XSDAttribute `xml:"attribute"`
-	Sequence   []XSDElement    `xml:"sequence>element"`
+	Sequence   []*XSDElement   `xml:"sequence>element"`
 }
 
 // XSDAttribute represent an element attribute. Simple elements cannot have
@@ -109,8 +109,8 @@ type XSDAttribute struct {
 // XSDSimpleType element defines a simple type and specifies the constraints
 // and information about the values of attributes or text-only elements.
 type XSDSimpleType struct {
-	Name        string         `xml:"name,attr"`
-	Restriction XSDRestriction `xml:"restriction"`
+	Name        string          `xml:"name,attr"`
+	Restriction *XSDRestriction `xml:"restriction"`
 }
 
 // XSDRestriction defines restrictions on a simpleType, simpleContent, or complexContent definition.
