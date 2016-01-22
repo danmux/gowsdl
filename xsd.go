@@ -56,6 +56,7 @@ type XSDComplexType struct {
 	Abstract       bool              `xml:"abstract,attr"`
 	Name           string            `xml:"name,attr"`
 	Mixed          bool              `xml:"mixed,attr"`
+	Doc            string            `xml:"annotation>documentation"`
 	Sequence       []*XSDElement     `xml:"sequence>element"`
 	Choice         []*XSDElement     `xml:"choice>element"`
 	SequenceChoice []*XSDElement     `xml:"sequence>choice>element"`

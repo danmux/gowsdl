@@ -121,7 +121,7 @@ func (s *SOAPClient) Call(soapAction string, request, response interface{}) erro
 	buffer := new(bytes.Buffer)
 
 	encoder := xml.NewEncoder(buffer)
-	//encoder.Indent("  ", "    ")
+	encoder.Indent("", "    ")
 
 	if err := encoder.Encode(envelope); err != nil {
 		return err

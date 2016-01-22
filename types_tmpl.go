@@ -8,13 +8,14 @@ var typesTmpl = `
 {{define "SimpleType"}}
 	{{$type := replaceReservedWords .Name | makePublic}}
 	type {{$type}} {{toGoType .Restriction.Base}}
-	const (
-		{{with .Restriction}}
-			{{range .Enumeration}}
-				{{if .Doc}} {{.Doc | comment}} {{end}}
-				{{$type}}{{$value := replaceReservedWords .Value}}{{$value | makePublic}} {{$type}} = "{{$value}}" {{end}}
+	{{with .Restriction}}
+		{{if .Enumeration}}
+			const (
+				{{range .Enumeration}}
+					{{if .Doc}} {{.Doc | comment}} {{end}}{{$type}}{{$value := replaceReservedWords .Value}}{{$value | makePublic}} {{$type}} = "{{$value}}" {{end}}
+			)
 		{{end}}
-	)
+	{{end}}
 {{end}}
 
 {{define "ComplexContent"}}
@@ -91,6 +92,22 @@ var typesTmpl = `
 					{{end}}
 				}
 			{{end}}
+
+			{{with .SimpleType}}
+				
+				{{if ne .Name ""}}{{$name := .Name}}{{end}}
+				{{$type := replaceReservedWords $name | makePublic}}
+				type {{$type}}Type {{toGoType .Restriction.Base}}
+				{{with .Restriction}}
+					{{if .Enumeration}}
+						const (
+							{{range .Enumeration}}
+								{{if .Doc}} {{.Doc | comment}} {{end}}{{$type}}{{$value := replaceReservedWords .Value}}{{$value | makePublic}} {{$type}} = "{{$value}}" {{end}}
+						)
+					{{end}}
+				{{end}}
+			{{end}}
+			
 		{{end}}
 	{{end}}
 

@@ -51,8 +51,12 @@ import (
 	"flag"
 	"fmt"
 	"go/format"
+	"io/ioutil"
 	"log"
+	"net/http"
+	"net/url"
 	"os"
+	"path/filepath"
 
 	gen "github.com/hooklift/gowsdl"
 )
@@ -67,9 +71,10 @@ var vers = flag.Bool("v", false, "Shows gowsdl version")
 var pkg = flag.String("p", "myservice", "Package under which code will be generated")
 var outFile = flag.String("o", "myservice.go", "File where the generated code will be saved")
 var insecure = flag.Bool("i", false, "Skips TLS Verification")
+var dl = flag.String("d", "", "Dont generate. Download to this root location rewriting urls with file:// schema.")
 
 func init() {
-	log.SetFlags(0)
+	// log.SetFlags(0)
 	log.SetOutput(os.Stdout)
 	log.SetPrefix("🍀  ")
 }
@@ -81,6 +86,12 @@ func main() {
 	}
 
 	flag.Parse()
+
+	// b, err := downloadFile("file:///Users/dan.mullineux/prj/play/src/github.com/hooklift/gowsdl/cmd/gowsdl?dan=4&me=poo", true)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	// println(string(b))
 
 	// Show app version
 	if *vers {
@@ -100,7 +111,7 @@ func main() {
 	}
 
 	// load wsdl
-	gowsdl, err := gen.NewGoWSDL(wsdlPath, *pkg, *insecure)
+	gowsdl, err := gen.NewGoWSDL(wsdlPath, *pkg, *insecure, *dl)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -136,4 +147,45 @@ func main() {
 	file.Write(source)
 
 	log.Println("Done 💩")
+}
+
+func downloadFile(furl string, ignoreTLS bool) ([]byte, error) {
+
+	parsedURL, err := url.Parse(furl)
+
+	if parsedURL.Scheme == "file" {
+		println(furl)
+		println(parsedURL.IsAbs())
+		println(parsedURL.Path)
+		println("ruri", parsedURL.RequestURI())
+		println(parsedURL.String())
+		println(parsedURL.RawQuery)
+		println(parsedURL.Query())
+
+		path, name := filepath.Split(parsedURL.RequestURI())
+		println(path, name)
+
+		return []byte("file"), fmt.Errorf("fuck %s", "file")
+	}
+
+	tr := &http.Transport{
+	// TLSClientConfig: &tls.Config{
+	// 	InsecureSkipVerify: ignoreTLS,
+	// },
+	// Dial: dialTimeout,
+	}
+	client := &http.Client{Transport: tr}
+
+	resp, err := client.Get(furl)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	return data, nil
 }
