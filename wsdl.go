@@ -17,6 +17,10 @@ type WSDL struct {
 	Service         []*WSDLService  `xml:"http://schemas.xmlsoap.org/wsdl/ service"`
 }
 
+type WSDLMeta struct {
+	Types WSDLTypeMeta `xml:"http://schemas.xmlsoap.org/wsdl/ types"`
+}
+
 // WSDLImport is the struct used for deserializing WSDL imports.
 type WSDLImport struct {
 	Namespace string `xml:"namespace,attr"`
@@ -27,6 +31,10 @@ type WSDLImport struct {
 type WSDLType struct {
 	Doc     string       `xml:"documentation"`
 	Schemas []*XSDSchema `xml:"schema"`
+}
+
+type WSDLTypeMeta struct {
+	Schemas []*XSDSchemaMeta `xml:"schema"`
 }
 
 // WSDLPart defines the struct for a function parameter within a WSDL.

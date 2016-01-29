@@ -12,26 +12,28 @@ func dialTimeout(network, addr string) (net.Conn, error) {
 }
 
 type SOAPEnvelope struct {
-	XMLName xml.Name ` + "`" + `xml:"http://schemas.xmlsoap.org/soap/envelope/ Envelope"` + "`" + `
+	XMLName xml.Name ` + "`" + `xml:"soapenv:Envelope"` + "`" + `
+
+	SoapNs string ` + "`" + `xml:"xmlns:soapenv,attr"` + "`" + ` // simulate a prefixed namespace
 
 	Body SOAPBody
 }
 
 type SOAPHeader struct {
-	XMLName xml.Name ` + "`" + `xml:"http://schemas.xmlsoap.org/soap/envelope/ Header"` + "`" + `
+	XMLName xml.Name ` + "`" + `xml:"soapenv:Header"` + "`" + `
 
 	Header interface{}
 }
 
 type SOAPBody struct {
-	XMLName xml.Name ` + "`" + `xml:"http://schemas.xmlsoap.org/soap/envelope/ Body"` + "`" + `
+	XMLName xml.Name // set default namespace in the call
 
 	Fault   *SOAPFault ` + "`" + `xml:",omitempty"` + "`" + `
 	Content interface{} ` + "`" + `xml:",omitempty"` + "`" + `
 }
 
 type SOAPFault struct {
-	XMLName xml.Name ` + "`" + `xml:"http://schemas.xmlsoap.org/soap/envelope/ Fault"` + "`" + `
+	XMLName xml.Name ` + "`" + `xml:"soapenv:Fault"` + "`" + `
 
 	Code   string ` + "`" + `xml:"faultcode,omitempty"` + "`" + `
 	String string ` + "`" + `xml:"faultstring,omitempty"` + "`" + `
@@ -112,11 +114,15 @@ func NewSOAPClient(url string, tls bool, auth *BasicAuth) *SOAPClient {
 	}
 }
 
-func (s *SOAPClient) Call(soapAction string, request, response interface{}) error {
+// pass in the namespace as tns
+func (s *SOAPClient) Call(soapAction string, request, response interface{}, tns string) error {
 	envelope := SOAPEnvelope{
-	//Header:        SoapHeader{},
+		SoapNs: "http://schemas.xmlsoap.org/soap/envelope/", // force our soapenv prefix namespace
+	    // Header:        SoapHeader{},                      // TODO: face a real scenario that needs a header and implement it then 
 	}
 
+	// set the default namespace to that passed in
+	envelope.Body.XMLName = xml.Name{Local: "soapenv:Body", Space: tns}
 	envelope.Body.Content = request
 	buffer := new(bytes.Buffer)
 

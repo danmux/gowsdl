@@ -39,10 +39,10 @@ var opsTmpl = `
 
 			{{if ne $requestTypeName.Name ""}}
 			// make sure we use any element referenced name
-			request.XMLName = xml.Name{ Local: "{{$requestTypeName.Name}}" } 
+			request.XMLName = xml.Name{ Local: "{{$requestTypeName.Name}}", Space: "{{$requestTypeName.Namespace}}" } 
 			{{end}}
 
-			err := service.client.Call("{{$soapAction}}", {{if ne $requestTypeName.Type ""}}request{{else}}nil{{end}}, response)
+			err := service.client.Call("{{$soapAction}}", {{if ne $requestTypeName.Type ""}}request{{else}}nil{{end}}, response, "{{$requestTypeName.Namespace}}")
 			if err != nil {
 				return nil, err
 			}

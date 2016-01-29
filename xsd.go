@@ -23,6 +23,52 @@ type XSDSchema struct {
 	SimpleType         []*XSDSimpleType  `xml:"simpleType"`
 }
 
+type XSDSchemaMeta struct {
+	Attributes []xml.Attr
+}
+
+func (m *XSDSchemaMeta) targetNameSpace() string {
+	for _, a := range m.Attributes {
+		if a.Name.Local == "targetNamespace" {
+			return a.Value
+		}
+	}
+	return ""
+}
+
+func (m *XSDSchemaMeta) tnsPrefix() string {
+	tns := m.targetNameSpace()
+	for _, a := range m.Attributes {
+		if a.Value == tns && a.Name.Space == "xmlns" {
+			return a.Name.Local
+		}
+	}
+	return ""
+}
+
+func (m *XSDSchemaMeta) xsdPrefix() string {
+	for _, a := range m.Attributes {
+		if a.Value == "http://www.w3.org/2001/XMLSchema" && a.Name.Space == "xmlns" {
+			return a.Name.Local
+		}
+	}
+	return ""
+}
+
+func (m *XSDSchemaMeta) getSpaceFromPrefix(prefix string) string {
+	for _, a := range m.Attributes {
+		if a.Name.Local == prefix && a.Name.Space == "xmlns" {
+			return a.Value
+		}
+	}
+	return ""
+}
+
+func (s *XSDSchemaMeta) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	s.Attributes = start.Attr
+	return d.Skip()
+}
+
 // XSDInclude represents schema includes.
 type XSDInclude struct {
 	SchemaLocation string `xml:"schemaLocation,attr"`

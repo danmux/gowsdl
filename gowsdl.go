@@ -36,8 +36,7 @@ type GoWSDL struct {
 	wsdl                  *WSDL
 	resolvedXSDExternals  map[string]bool
 	currentRecursionLevel uint8
-	localRoot             string           // where to store dl'd files
-	allTypes              map[string]TType // all the types
+	localRoot             string // where to store dl'd files
 }
 
 var cacheDir = filepath.Join(os.TempDir(), "gowsdl-cache")
@@ -146,7 +145,6 @@ func NewGoWSDL(file, pkg string, ignoreTLS bool, localRoot string) (*GoWSDL, err
 		pkg:       pkg,
 		ignoreTLS: ignoreTLS,
 		localRoot: localRoot,
-		allTypes:  map[string]TType{},
 	}, nil
 }
 
@@ -234,8 +232,8 @@ func (g *GoWSDL) unmarshal() error {
 
 	// fmt.Printf("%# v\n\n", pretty.Formatter(g.wsdl.Types))
 	// fmt.Printf("%# v\n\n", pretty.Formatter(g.wsdl.Service))
-	// fmt.Printf("%# v\n\n", pretty.Formatter(g.wsdl.Binding))
-	// fmt.Printf("%# v\n\n", pretty.Formatter(g.wsdl.PortTypes))
+	fmt.Printf("%# v\n\n", pretty.Formatter(g.wsdl.Binding))
+	fmt.Printf("%# v\n\n", pretty.Formatter(g.wsdl.PortTypes))
 	// fmt.Printf("%# v\n\n", pretty.Formatter(g.wsdl.Messages))
 
 	return nil
@@ -297,17 +295,13 @@ func (g *GoWSDL) resolveXSDExternals(schema *XSDSchema, url *url.URL) error {
 }
 
 func (g *GoWSDL) genTypes() ([]byte, error) {
-	funcMap := template.FuncMap{
-		"toGoType":             toGoType,
-		"stripns":              stripns,
-		"replaceReservedWords": replaceReservedWords,
-		"makePublic":           makePublic,
-		"comment":              comment,
-	}
-
-	g.flattenTypes()
-
-	fmt.Printf("%# v\n\n", pretty.Formatter(g.allTypes))
+	// funcMap := template.FuncMap{
+	// 	"toGoType":             toGoType,
+	// 	"stripns":              stripns,
+	// 	"replaceReservedWords": replaceReservedWords,
+	// 	"makePublic":           makePublic,
+	// 	"comment":              comment,
+	// }
 
 	// data := new(bytes.Buffer)
 	// tmpl := template.Must(template.New("types").Funcs(funcMap).Parse(typesTmpl))
@@ -316,423 +310,34 @@ func (g *GoWSDL) genTypes() ([]byte, error) {
 	// 	return nil, err
 	// }
 
-	data := new(bytes.Buffer)
-	tmpl := template.Must(template.New("types").Funcs(funcMap).Parse(flatTypesTmpl))
-	err := tmpl.Execute(data, g.allTypes)
-	if err != nil {
-		return nil, err
-	}
-
-	return data.Bytes(), nil
-}
-
-type TRestriction interface{}
-
-type SimpleType struct {
-	Comment      string
-	Name         string
-	Type         string
-	Restrictions []TRestriction // optional
-}
-
-func (s SimpleType) TypeString() string {
-	if len(s.Restrictions) > 0 { // if we have a restricted type then return this type
-		return s.Name
-	}
-	return s.Type // else derefernce simple type
-}
-
-func (s SimpleType) FieldsRef() []*Field {
-	return nil
-}
-
-func (s SimpleType) isComplex() bool {
-	return false
-}
-
-func (s SimpleType) String() string {
-	return "type\t" + s.Name + "\t" + toGoType(s.Type) + "\n"
-}
-
-func (s SimpleType) CommentString() string {
-	return s.Comment
-}
-
-// Does not appear to serve any purpose other than a lookup
-type Lookup struct {
-	Comment string
-	Name    string
-	Type    string
-}
-
-func (l Lookup) TypeString() string {
-	return l.Type
-}
-
-func (l Lookup) FieldsRef() []*Field {
-	return nil
-}
-
-func (l Lookup) isComplex() bool {
-	return false
-}
-
-func (l Lookup) String() string {
-	return ""
-}
-
-func (l Lookup) CommentString() string {
-	return l.Comment
-}
-
-type Field struct {
-	Comment  string
-	Name     string
-	Type     string
-	XMLTag   string
-	Optional bool
-	RefName  string
-}
-
-func makeComment(c string) (string, bool) {
-	c = comment(strings.Trim(c, "\n\t"))
-
-	nli := strings.Index(c, "\n")
-	return c, nli >= 0
-}
-
-func (f *Field) String() string {
-	comment := ""
-	var multi bool
-	if f.Comment != "" {
-		comment, multi = makeComment(f.Comment)
-	}
-	if f.Name == "" {
-		return ""
-	}
-	if multi {
-		return fmt.Sprintf("%s\n\t%s\t%s\t%s", comment, makePublic(f.Name), toGoType(f.Type), f.XMLTag)
-	}
-
-	return fmt.Sprintf("%s\t%s\t%s\t%s", makePublic(f.Name), toGoType(f.Type), f.XMLTag, comment)
-
-}
-
-type Struct struct {
-	Raw       string
-	Comment   string
-	Name      string
-	NameSpace string
-	XMLTag    string
-	Fields    []*Field
-}
-
-// TODO
-/*
-{{if ne .ComplexContent.Extension.Base ""}}
-			{{template "ComplexContent" .ComplexContent}}
-		{{else if ne .SimpleContent.Extension.Base ""}}
-			{{template "SimpleContent" .SimpleContent}}
-*/
-
-func (s Struct) String() string {
-
-	s.Comment, _ = makeComment(s.Comment)
-
-	tmpl := `
-	{{.Comment}}
-	type {{.Name}} struct {
-		XMLName xml.Name 
-		
-		{{range .FieldsRef}}{{.String}}
-		{{end}} }
-`
-
-	structTmpl, err := template.New("test").Parse(tmpl)
-	if err != nil {
-		panic(err)
-	}
-
-	buf := &bytes.Buffer{}
-	err = structTmpl.Execute(buf, s)
-	if err != nil {
-		panic(err)
-	}
-
-	return buf.String()
-}
-
-func (s Struct) TypeString() string {
-	return s.Name
-}
-
-func (s Struct) FieldsRef() []*Field {
-	return s.Fields
-}
-
-func (s Struct) isComplex() bool {
-	return true
-}
-
-func (s Struct) CommentString() string {
-	return s.Comment
-}
-
-type TType interface {
-	String() string
-	TypeString() string
-	CommentString() string
-	FieldsRef() []*Field
-	isComplex() bool // shoudl we output this
-}
-
-// and returns a type name if it was a type
-func (g *GoWSDL) flattenElement(s *XSDSchema, ct *XSDElement) string {
-	if ct == nil {
-		return ""
-	}
-
-	// ref elements will have been added
-	if ct.Ref != "" {
-		return "" // refs found later
-	}
-
-	// if this has not got a name then we cant make a type from it
-	if ct.Name == "" {
-		return ""
-	}
-
-	// when it has a name and a type I think it is only ever used as a lookup - so just keep it in
-	// or other routines to use but skip it - TODO - check this - maybe add lookup to get the other details
-	if ct.Type != "" {
-		// add a lookup
-		t, ok := g.allTypes[ct.Name]
-		if ok {
-			return getTypeName(t.TypeString()) // so just return the type
-		}
-
-		l := Lookup{
-			Comment: ct.Doc,
-			Name:    ct.Name,
-			Type:    getTypeName(ct.Type),
-		}
-
-		g.allTypes[ct.Name] = l
-		return getTypeName(ct.Type) // so just return the type
-	}
-
-	if ct.ComplexType != nil && ct.SimpleType != nil {
-		panic("cant have simple and complex types in an element")
-	}
-
-	// if we have a name and no type then this is likely to be used as a type from a ref
-	typeName := getTypeName(ct.Name)
-
-	if ct.SimpleType != nil {
-		// inject our name
-		if ct.SimpleType.Name == "" {
-			ct.SimpleType.Name = ct.Name
-		}
-		typeName = g.flattenSimpleType(s, ct.SimpleType)
-	}
-
-	if ct.ComplexType != nil {
-
-		log.Println("Got complex element: ", ct.Name)
-
-		// inject our name
-		if ct.ComplexType.Name == "" {
-			ct.ComplexType.Name = ct.Name
-		}
-
-		typeName = g.flattenComplexType(s, ct.ComplexType)
-
-		log.Println("complex element created a type : ", typeName)
-	}
-
-	return typeName
-}
-
-func getTypeName(in string) string {
-	return makePublic(replaceReservedWords(stripns(in)))
-}
-
-func (g *GoWSDL) flattenSimpleType(s *XSDSchema, t *XSDSimpleType) string {
-	if t == nil {
-		return ""
-	}
-
-	if t.Restriction == nil {
-		log.Println("WARNING - simple type without a restriction - whats the point? " + t.Name)
-	}
-
-	typeName := getTypeName(t.Name)
-	_, ok := g.allTypes[typeName]
-	if ok {
-		log.Println("WARNING - fst type name conflict " + typeName)
-		return ""
-	}
-
-	sst := SimpleType{
-		Name: typeName,
-		Type: t.Restriction.Base,
-		// Restrictions []TRestriction // TODO optional
-	}
-
-	g.allTypes[typeName] = sst
-
-	return typeName
-}
-
-func (g *GoWSDL) flattenComplexType(s *XSDSchema, t *XSDComplexType) string {
-	if t == nil {
-		return ""
-	}
-
-	if t.Abstract {
-		log.Println("abstract types not supported - skipping")
-		return ""
-	}
-
-	typeName := getTypeName(t.Name)
-	_, ok := g.allTypes[typeName]
-	if ok {
-		log.Println("WARNING - fct type name conflict " + typeName)
-		return ""
-	}
-
-	sct := Struct{
-		Raw:     t.Name,
-		Name:    typeName,
-		XMLTag:  fmt.Sprintf("`xml:\"%s\"`", s.TargetNamespace),
-		Comment: t.Doc,
-		Fields:  []*Field{},
-	}
-
-	for _, ct := range t.Attributes {
-		ft := g.flattenSimpleType(s, ct.SimpleType)
-		if ft == "" {
-			ft = ct.Type
-		}
-		sct.Fields = append(sct.Fields, &Field{
-			Comment:  ct.Doc,
-			Name:     ct.Name,
-			Type:     ft,
-			XMLTag:   fmt.Sprintf("`xml:\"%s,attr,omitempty\"`", ct.Name),
-			Optional: false,
-			RefName:  "",
-		})
-	}
-
-	for _, ct := range t.All {
-		ft := g.flattenElement(s, ct)
-		sct.Fields = append(sct.Fields, g.makeField(s, ct, ft))
-	}
-	for _, ct := range t.Choice {
-		ft := g.flattenElement(s, ct)
-		sct.Fields = append(sct.Fields, g.makeField(s, ct, ft))
-	}
-	for _, ct := range t.Sequence {
-		ft := g.flattenElement(s, ct)
-		sct.Fields = append(sct.Fields, g.makeField(s, ct, ft))
-	}
-	for _, ct := range t.SequenceChoice {
-		ft := g.flattenElement(s, ct)
-		sct.Fields = append(sct.Fields, g.makeField(s, ct, ft))
-	}
-
-	g.allTypes[typeName] = sct
-
-	return typeName
-}
-
-func (g *GoWSDL) makeField(s *XSDSchema, ct *XSDElement, fType string) *Field {
-	oe := ",omitempty"
-	if ct.MinOccurs != "0" {
-		oe = ""
-	}
-
-	name := ct.Name
-	if name == "" {
-		name = ct.Ref // use a ref if name not set
-	}
-	tag := fmt.Sprintf("`xml:\"%s%s\"`", name, oe)
-
-	return &Field{
-		Comment:  ct.Doc,
-		Name:     name,
-		Type:     fType,
-		XMLTag:   tag,
-		Optional: false,
-		RefName:  ct.Ref,
-	}
-}
-
-func (g *GoWSDL) toGoType(xsdType string) string {
-	// Handles name space, ie. xsd:string, xs:string
-	r := strings.Split(xsdType, ":")
-
-	t := r[0]
-
-	if len(r) == 2 {
-		t = r[1]
-	}
-
-	value := xsd2GoTypes[strings.ToLower(t)]
-
-	if value != "" {
-		return value
-	}
-
-	return "*" + replaceReservedWords(makePublic(t))
-}
-
-func (g *GoWSDL) flattenTypes() {
-	for _, s := range g.wsdl.Types.Schemas {
-
-		for _, ct := range s.Elements {
-			g.flattenElement(s, ct)
-		}
-
-		for _, ct := range s.ComplexTypes {
-			g.flattenComplexType(s, ct)
-		}
-
-		for _, ct := range s.SimpleType {
-			g.flattenSimpleType(s, ct)
-		}
-	}
-
-	// no go back round and fill in refs
-
-	for _, t := range g.allTypes {
-		fl := t.FieldsRef()
-		if fl != nil {
-			for _, f := range fl {
-				if f.RefName == "" {
-					continue
-				}
-				var ok bool
-				l, ok := g.allTypes[f.RefName]
-				if ok {
-					f.Type = l.TypeString()
-				} else {
-					l, ok = g.allTypes[getTypeName(f.RefName)]
-					if ok {
-						f.Type = l.TypeString()
-					}
-				}
-				if ok {
-					if f.Comment == "" && l.CommentString() != "" {
-						f.Comment = l.CommentString()
-					}
-				}
-			}
-		}
-	}
+	// data := new(bytes.Buffer)
+	// tmpl := template.Must(template.New("types").Funcs(funcMap).Parse(flatTypesTmpl))
+	// err := tmpl.Execute(data, g.allTypes)
+	// if err != nil {
+	// return nil, err
+	// }
+
+	// return data.Bytes(), nil
+
+	return nil, nil
 }
 
 func (g *GoWSDL) genOperations() ([]byte, error) {
+
+	// filter out none soap bindings
+	// find all soap http bindings - the only binding we support
+	for _, binding := range g.wsdl.Binding {
+		if binding.SOAPBinding.Transport == "http://schemas.xmlsoap.org/soap/http" {
+
+		} else {
+			log.Println("found a binding we dont support", binding.Name, binding.Type)
+		}
+	}
+
+	// for _, port := range g.wsdl.PortTypes {
+	// 	binding.Type
+	// }
+
 	funcMap := template.FuncMap{
 		"toGoType":             toGoType,
 		"stripns":              stripns,
@@ -832,57 +437,18 @@ func normalize(value string) string {
 	return strings.Map(mapping, value)
 }
 
-var xsd2GoTypes = map[string]string{
-	"string":        "string",
-	"token":         "string",
-	"float":         "float32",
-	"double":        "float64",
-	"decimal":       "float64",
-	"integer":       "int32",
-	"int":           "int32",
-	"short":         "int16",
-	"byte":          "int8",
-	"long":          "int64",
-	"boolean":       "bool",
-	"datetime":      "time.Time",
-	"date":          "time.Time",
-	"time":          "time.Time",
-	"base64binary":  "[]byte",
-	"hexbinary":     "[]byte",
-	"unsignedint":   "uint32",
-	"unsignedshort": "uint16",
-	"unsignedbyte":  "byte",
-	"unsignedlong":  "uint64",
-	"anytype":       "interface{}",
-}
-
-func toGoType(xsdType string) string {
-	// Handles name space, ie. xsd:string, xs:string
-	r := strings.Split(xsdType, ":")
-
-	t := r[0]
-
-	if len(r) == 2 {
-		t = r[1]
-	}
-
-	value := xsd2GoTypes[strings.ToLower(t)]
-
-	if value != "" {
-		return value
-	}
-
-	return "*" + replaceReservedWords(makePublic(t))
-}
-
 type NameType struct {
-	Name string
-	Type string
+	Name      string
+	Type      string
+	Namespace string
 }
 
 func (n *NameType) FixupForTemplate() {
 	n.Name = stripns(n.Name)
-	n.Type = makePublic(replaceReservedWords(stripns(n.Type)))
+	// n.Type = toGoType(getTypeName(n.Type))
+	if n.Type[0] == '*' { // strip pointers - as teplate addds them back
+		n.Type = n.Type[1:]
+	}
 }
 
 // Given a message, finds its type.
@@ -892,7 +458,10 @@ func (n *NameType) FixupForTemplate() {
 // seem critical at this point
 func (g *GoWSDL) findTypeFromMessage(message string) NameType {
 	nt := g.findTypeFromMessageRaw(message)
+	println("==== = = = = = = ", nt.Type)
 	nt.FixupForTemplate()
+
+	println("==== = = = = = = ?", nt.Type)
 	return nt
 }
 
@@ -930,14 +499,16 @@ func (g *GoWSDL) findTypeFromMessageRaw(message string) NameType {
 				if strings.EqualFold(elRef, el.Name) {
 					if el.Type != "" {
 						return NameType{ // this needs to be used to create the xml element name as well
-							Name: el.Name,
-							Type: el.Type,
+							Name:      el.Name,
+							Type:      el.Type,
+							Namespace: schema.TargetNamespace,
 						}
 					}
 					// else ... what was the point of the reference :/ XSD ftw
 					return NameType{
-						Name: el.Name,
-						Type: el.Name,
+						Name:      el.Name,
+						Type:      el.Name,
+						Namespace: schema.TargetNamespace,
 					}
 				}
 			}
